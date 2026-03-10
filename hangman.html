@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HANGMAN</title>
+<link href="https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0a07;
+    --paper: #1a1510;
+    --ink: #e8d5a3;
+    --faded: #7a6840;
+    --rope: #8b6914;
+    --blood: #8b1a1a;
+    --blood-bright: #c0392b;
+    --scaffold: #5c4a2a;
+    --glow: #e8d5a3;
+    --correct: #4a7c59;
+    --wrong: #8b1a1a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Special Elite', cursive;
+    color: var(--ink);
+    overflow-x: hidden;
+    padding: 20px;
+  }
+
+  /* Grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.4;
+  }
+
+  /* Vignette */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 99;
+  }
+
+  h1 {
+    font-family: 'Creepster', cursive;
+    font-size: clamp(48px, 10vw, 88px);
+    letter-spacing: 12px;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-shadow: 0 0 40px rgba(232,213,163,0.3), 3px 3px 0 rgba(0,0,0,0.8);
+    margin-bottom: 4px;
+    animation: flicker 8s infinite;
+    line-height: 1;
+  }
+
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.85; }
+    97% { opacity: 1; }
+    98% { opacity: 0.9; }
+    99% { opacity: 1; }
+  }
+
+  .subtitle {
+    font-size: 12px;
+    letter-spacing: 6px;
+    color: var(--faded);
+    text-transform: uppercase;
+    margin-bottom: 36px;
+  }
+
+  .game-wrapper {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 48px;
+    width: 100%;
+    max-width: 960px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Gallows SVG ── */
+  .gallows-container {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  #gallows-svg {
+    filter: drop-shadow(0 4px 20px rgba(0,0,0,0.6));
+  }
+
+  /* ── Right panel ── */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    flex: 1;
+    min-width: 280px;
+  }
+
+  /* Category badge */
+  .category-badge {
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--faded);
+    border: 1px solid var(--scaffold);
+    padding: 4px 16px;
+    border-radius: 2px;
+  }
+
+  /* Hint */
+  .hint-text {
+    font-size: 13px;
+    color: var(--faded);
+    letter-spacing: 1px;
+    font-style: italic;
+    min-height: 18px;
+    text-align: center;
+  }
+
+  /* Word display */
+  .word-display {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .letter-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .letter-char {
+    font-family: 'Creepster', cursive;
+    font-size: 32px;
+    width: 32px;
+    text-align: center;
+    min-height: 38px;
+    color: var(--ink);
+    transition: all 0.3s;
+  }
+
+  .letter-char.revealed {
+    animation: drop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    color: var(--ink);
+    text-shadow: 0 0 12px rgba(232,213,163,0.5);
+  }
+
+  .letter-char.wrong-reveal {
+    color: var(--blood-bright);
+    text-shadow: 0 0 12px rgba(192,57,43,0.6);
+  }
+
+  @keyframes drop-in {
+    from { opacity: 0; transform: translateY(-20px) scale(0.5); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .letter-line {
+    width: 32px;
+    height: 2px;
+    background: var(--scaffold);
+  }
+
+  /* Wrong guesses */
+  .wrong-letters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    min-height: 36px;
+    max-width: 320px;
+  }
+
+  .wrong-letter {
+    font-family: 'Creepster', cursive;
+    font-size: 22px;
+    color: var(--blood-bright);
+    text-decoration: line-through;
+    animation: shake-in 0.3s ease;
+    text-shadow: 0 0 8px rgba(192,57,43,0.5);
+  }
+
+  @keyframes shake-in {
+    0% { transform: rotate(-20deg) scale(1.4); opacity: 0; }
+    60% { transform: rotate(5deg) scale(1.1); }
+    100% { transform: rotate(0deg) scale(1); opacity: 1; }
+  }
+
+  /* Lives indicator */
+  .lives-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--faded);
+  }
+
+  .lives-pips {
+    display: flex;
+    gap: 5px;
+  }
+
+  .pip {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--blood-bright);
+    transition: all 0.4s;
+  }
+
+  .pip.lost {
+    background: #2a1a1a;
+    border: 1px solid #3a2a2a;
+    transform: scale(0.7);
+  }
+
+  /* Keyboard */
+  .keyboard {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .key-row {
+    display: flex;
+    gap: 5px;
+  }
+
+  .key {
+    width: 36px;
+    height: 36px;
+    background: var(--paper);
+    border: 1px solid var(--scaffold);
+    border-radius: 3px;
+    color: var(--ink);
+    font-family: 'Special Elite', cursive;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-transform: uppercase;
+  }
+
+  .key:hover:not(:disabled) {
+    background: var(--scaffold);
+    border-color: var(--ink);
+    box-shadow: 0 0 12px rgba(232,213,163,0.2);
+    transform: translateY(-2px);
+  }
+
+  .key:disabled { cursor: not-allowed; opacity: 0.35; }
+  .key.correct-key { background: rgba(74,124,89,0.3); border-color: #4a7c59; color: #7ec99a; }
+  .key.wrong-key   { background: rgba(139,26,26,0.3); border-color: var(--blood); color: #944; }
+
+  /* Status message */
+  .status-msg {
+    font-family: 'Creepster', cursive;
+    font-size: 28px;
+    letter-spacing: 4px;
+    text-align: center;
+    min-height: 40px;
+    text-shadow: 0 0 20px currentColor;
+  }
+
+  .status-msg.win  { color: #7ec99a; animation: pulse-glow 1.5s infinite; }
+  .status-msg.lose { color: var(--blood-bright); animation: pulse-glow 1.5s infinite; }
+
+  @keyframes pulse-glow {
+    0%, 100% { text-shadow: 0 0 20px currentColor; }
+    50% { text-shadow: 0 0 40px currentColor, 0 0 80px currentColor; }
+  }
+
+  /* New game button */
+  .btn-new {
+    font-family: 'Creepster', cursive;
+    font-size: 18px;
+    letter-spacing: 4px;
+    padding: 10px 32px;
+    background: transparent;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    border-radius: 2px;
+  }
+
+  .btn-new:hover {
+    background: rgba(232,213,163,0.1);
+    box-shadow: 0 0 24px rgba(232,213,163,0.2);
+    transform: scale(1.04);
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .key { width: 30px; height: 30px; font-size: 12px; }
+    h1 { font-size: 48px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Hangman</h1>
+<p class="subtitle">Guess the word · Save the soul</p>
+
+<div class="game-wrapper">
+
+  <!-- Gallows -->
+  <div class="gallows-container">
+    <svg id="gallows-svg" width="220" height="280" viewBox="0 0 220 280">
+      <!-- Base & structure (always visible) -->
+      <line x1="20" y1="270" x2="200" y2="270" stroke="#5c4a2a" stroke-width="5" stroke-linecap="round"/>
+      <line x1="60" y1="270" x2="60" y2="20"  stroke="#5c4a2a" stroke-width="5" stroke-linecap="round"/>
+      <line x1="60" y1="20"  x2="150" y2="20" stroke="#5c4a2a" stroke-width="5" stroke-linecap="round"/>
+      <line x1="150" y1="20" x2="150" y2="50" stroke="#8b6914" stroke-width="3" stroke-linecap="round"/>
+      <!-- support beam -->
+      <line x1="60" y1="20" x2="95" y2="55"   stroke="#5c4a2a" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+
+      <!-- Body parts — shown progressively -->
+      <!-- 1: Head -->
+      <circle id="p-head" cx="150" cy="72" r="22" stroke="#e8d5a3" stroke-width="2.5" fill="none" opacity="0" />
+      <!-- 2: Body -->
+      <line id="p-body" x1="150" y1="94" x2="150" y2="170" stroke="#e8d5a3" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <!-- 3: Left arm -->
+      <line id="p-larm" x1="150" y1="115" x2="118" y2="148" stroke="#e8d5a3" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <!-- 4: Right arm -->
+      <line id="p-rarm" x1="150" y1="115" x2="182" y2="148" stroke="#e8d5a3" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <!-- 5: Left leg -->
+      <line id="p-lleg" x1="150" y1="170" x2="118" y2="210" stroke="#e8d5a3" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+      <!-- 6: Right leg -->
+      <line id="p-rleg" x1="150" y1="170" x2="182" y2="210" stroke="#e8d5a3" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+
+      <!-- Eyes (shown on death) -->
+      <text id="p-eyes" x="150" y="78" text-anchor="middle" font-size="14" fill="#8b1a1a" opacity="0" font-family="serif">✕</text>
+    </svg>
+  </div>
+
+  <!-- Right panel -->
+  <div class="right-panel">
+    <div class="category-badge" id="category-badge">Category</div>
+    <div class="hint-text" id="hint-text"></div>
+
+    <div class="word-display" id="word-display"></div>
+
+    <div class="lives-row">
+      <span>Lives:</span>
+      <div class="lives-pips" id="lives-pips"></div>
+    </div>
+
+    <div>
+      <p style="font-size:12px;letter-spacing:3px;color:var(--faded);text-align:center;margin-bottom:8px;text-transform:uppercase;">Wrong guesses</p>
+      <div class="wrong-letters" id="wrong-letters"></div>
+    </div>
+
+    <div class="status-msg" id="status-msg"></div>
+
+    <div class="keyboard" id="keyboard"></div>
+
+    <button class="btn-new" id="btn-new">New Game</button>
+  </div>
+</div>
+
+<script>
+const WORDS = [
+  { word: "PHANTOM",    category: "Supernatural", hint: "A ghostly apparition" },
+  { word: "LABYRINTH",  category: "Architecture", hint: "A maze of winding paths" },
+  { word: "ECLIPSE",    category: "Astronomy",    hint: "Sun blocked by the moon" },
+  { word: "VAMPIRE",    category: "Supernatural", hint: "Creature of the night" },
+  { word: "ALCHEMY",    category: "Mysticism",    hint: "Turning lead to gold" },
+  { word: "SPECTER",    category: "Supernatural", hint: "Another word for ghost" },
+  { word: "GUILLOTINE", category: "History",      hint: "Blade of the revolution" },
+  { word: "CRYPTIC",    category: "Language",     hint: "Mysterious and puzzling" },
+  { word: "WEREWOLF",   category: "Supernatural", hint: "Full moon transformation" },
+  { word: "DUNGEON",    category: "Architecture", hint: "Underground prison cell" },
+  { word: "SKELETON",   category: "Anatomy",      hint: "The bones within us" },
+  { word: "VORTEX",     category: "Science",      hint: "A spinning whirlpool" },
+  { word: "CAULDRON",   category: "Mysticism",    hint: "A witch's cooking pot" },
+  { word: "FORBIDDEN",  category: "Language",     hint: "Strictly not allowed" },
+  { word: "RAVEN",      category: "Animals",      hint: "Edgar Allan Poe's dark bird" },
+  { word: "CATACOMBS",  category: "Architecture", hint: "Underground burial tunnels" },
+  { word: "SHADOWS",    category: "Supernatural", hint: "Darkness cast by light" },
+  { word: "CURSED",     category: "Mysticism",    hint: "Under a dark spell" },
+  { word: "ABYSS",      category: "Language",     hint: "A bottomless void" },
+  { word: "GRIMOIRE",   category: "Mysticism",    hint: "A book of magic spells" },
+];
+
+const BODY_PARTS = ['p-head','p-body','p-larm','p-rarm','p-lleg','p-rleg'];
+const MAX_WRONG = BODY_PARTS.length;
+const ROWS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+
+let word = '', guessed = new Set(), wrongCount = 0, gameOver = false;
+
+function pickWord() {
+  return WORDS[Math.floor(Math.random() * WORDS.length)];
+}
+
+function initGame() {
+  const chosen = pickWord();
+  word = chosen.word;
+  guessed = new Set();
+  wrongCount = 0;
+  gameOver = false;
+
+  // Reset gallows
+  BODY_PARTS.forEach(id => {
+    document.getElementById(id).setAttribute('opacity', '0');
+  });
+  document.getElementById('p-eyes').setAttribute('opacity','0');
+
+  document.getElementById('category-badge').textContent = chosen.category;
+  document.getElementById('hint-text').textContent = `Hint: ${chosen.hint}`;
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('status-msg').className = 'status-msg';
+  document.getElementById('wrong-letters').innerHTML = '';
+
+  renderWord();
+  renderLives();
+  renderKeyboard();
+}
+
+function renderWord() {
+  const container = document.getElementById('word-display');
+  container.innerHTML = '';
+  for (const ch of word) {
+    const slot = document.createElement('div');
+    slot.className = 'letter-slot';
+
+    const charEl = document.createElement('div');
+    charEl.className = 'letter-char';
+    if (guessed.has(ch)) {
+      charEl.textContent = ch;
+      charEl.classList.add('revealed');
+    } else if (gameOver && wrongCount >= MAX_WRONG) {
+      charEl.textContent = ch;
+      charEl.classList.add('wrong-reveal');
+    }
+
+    const line = document.createElement('div');
+    line.className = 'letter-line';
+
+    slot.appendChild(charEl);
+    slot.appendChild(line);
+    container.appendChild(slot);
+  }
+}
+
+function renderLives() {
+  const container = document.getElementById('lives-pips');
+  container.innerHTML = '';
+  for (let i = 0; i < MAX_WRONG; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'pip' + (i < wrongCount ? ' lost' : '');
+    container.appendChild(pip);
+  }
+}
+
+function renderKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  for (const row of ROWS) {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'key-row';
+    for (const letter of row) {
+      const btn = document.createElement('button');
+      btn.className = 'key';
+      btn.textContent = letter;
+      btn.dataset.letter = letter;
+      if (guessed.has(letter)) {
+        btn.disabled = true;
+        btn.classList.add(word.includes(letter) ? 'correct-key' : 'wrong-key');
+      }
+      btn.addEventListener('click', () => guess(letter));
+      rowEl.appendChild(btn);
+    }
+    kb.appendChild(rowEl);
+  }
+}
+
+function showBodyPart(index) {
+  const el = document.getElementById(BODY_PARTS[index]);
+  el.style.transition = 'opacity 0.5s';
+  el.setAttribute('opacity','1');
+  // Blood-red tint for wrong guesses
+  el.setAttribute('stroke', '#c0392b');
+  setTimeout(() => el.setAttribute('stroke','#e8d5a3'), 800);
+}
+
+function guess(letter) {
+  if (gameOver || guessed.has(letter)) return;
+  guessed.add(letter);
+
+  if (word.includes(letter)) {
+    // Correct
+    renderWord();
+    // Check win
+    if ([...word].every(ch => guessed.has(ch))) {
+      gameOver = true;
+      const msg = document.getElementById('status-msg');
+      msg.textContent = '✦ ESCAPED ✦';
+      msg.classList.add('win');
+    }
+  } else {
+    // Wrong
+    showBodyPart(wrongCount);
+    wrongCount++;
+    renderLives();
+
+    const wrongEl = document.getElementById('wrong-letters');
+    const span = document.createElement('span');
+    span.className = 'wrong-letter';
+    span.textContent = letter;
+    wrongEl.appendChild(span);
+
+    if (wrongCount >= MAX_WRONG) {
+      gameOver = true;
+      document.getElementById('p-eyes').setAttribute('opacity','1');
+      renderWord();
+      const msg = document.getElementById('status-msg');
+      msg.textContent = '✦ HANGED ✦';
+      msg.classList.add('lose');
+    }
+  }
+  renderKeyboard();
+}
+
+// Keyboard input
+document.addEventListener('keydown', e => {
+  const letter = e.key.toUpperCase();
+  if (/^[A-Z]$/.test(letter)) guess(letter);
+});
+
+document.getElementById('btn-new').addEventListener('click', initGame);
+
+initGame();
+</script>
+</body>
+</html>
